@@ -31,13 +31,13 @@ import (
 	"io"
 )
 
-// A Reader supports reading groups of 0..64 bits from the data supplied by
+// A Reader supports reading groups of 0 to 64 bits from the data supplied by
 // an io.Reader.
 type Reader struct {
 	r io.Reader // source of additional input
 
-	// The low-order bits of buf holds data read from r but not yet delivered to
-	// the reader.  The bottom nb bits of buf are valid, the rest is garbage.
+	// The low-order nb bits of buf hold data read from r but not yet delivered
+	// to the reader.  Any bits with index ≥ nb are garbage.
 	buf uint64
 	nb  uint8 // 0 ≤ nb ≤ 64
 }
@@ -113,8 +113,89 @@ func (r *Reader) Read(count int, v *uint64) (n int, err error) {
 // NewReader returns a bitstream reader that consumes data from r.
 func NewReader(r io.Reader) *Reader { return &Reader{r: r} }
 
-/*
-Design notes:
+// A Writer supports writing groups of 0 to 64 bits to an underlying io.Writer.
+// Writes are buffered, so the caller must call Flush when finished to ensure
+// everything has been written out.
+type Writer struct {
+	w io.Writer
 
+	// The low-order nb bits of buf hold the bits that have been received by
+	// calls to Write but not yet delivered to w.  We maintain the invariant
+	// that buf always has < 64 bits; when it reaches 64 we write immediately.
+	// Any bits with index ≥ nb are garbage.
+	buf uint64
+	nb  uint8 // 0 ≤ nb < 64
+}
 
-*/
+// Write appends the low-order count bits of v to the stream, and returns the
+// number of bits written.  It is an error if count < 0 or count > 64.
+//
+// Any other error is the result of a call to the underlying io.Writer.  When
+// that occurs, the write is abandoned and no bits are added to the stream.
+// For diagnostic purposes, the returned count is the byte count returned by
+// the failed io.Writer, but it is effectively 0 for the bitstream.
+func (w *Writer) Write(count int, v uint64) (int, error) {
+	if count < 0 || count > 64 {
+		return 0, ErrCountRange
+	}
+	ucount := uint8(count)
+
+	// Shift in as much of the input as possible.  There is always at least one
+	// bit free in the buffer.
+	n2copy := 64 - w.nb
+	if n2copy > ucount {
+		n2copy = ucount
+	}
+	nleft := ucount - n2copy // how many bits remain in v after packing
+	out := w.buf<<n2copy | v>>nleft
+	nused := w.nb + n2copy // how many bits of out are in-use
+
+	// If the buffer is full, send it to the underlying writer.  If that
+	// succeeds, we definitely have room for any remaining bits.
+	if nused == 64 {
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, out)
+		nw, err := w.w.Write(buf)
+		if err != nil {
+			return nw, err // write failed; don't update anything
+		}
+		out = v
+		nused = nleft
+	}
+
+	w.buf = out
+	w.nb = nused
+	return count, nil
+}
+
+// Padding returns the number 0 ≤ n < 8 of additional bits that would have to
+// be written to w to ensure that the output is an even number of 8-bit bytes.
+func (w *Writer) Padding() int {
+	if p := w.nb % 8; p != 0 {
+		return int(8 - p)
+	}
+	return 0
+}
+
+// Flush writes any unwritten data remaining in w to the underlying writer.  If
+// the data remaining do not comprise a round number of bytes, they are padded
+// with zeroes to the next byte boundary.
+func (w *Writer) Flush() error {
+	if w.nb != 0 {
+		out := w.buf << uint(w.Padding())
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, out)
+
+		// When flushing, the buffer may not be full; so skip any leading bytes
+		// that are not part of the padded output.
+		skip := 8 - (w.nb+7)/8
+		if _, err := w.w.Write(buf[skip:]); err != nil {
+			return err
+		}
+		w.nb = 0
+	}
+	return nil
+}
+
+// NewWriter returns a bitstream writer that delivers output to w.
+func NewWriter(w io.Writer) *Writer { return &Writer{w: w} }
