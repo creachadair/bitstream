@@ -33,6 +33,7 @@
 //   bw.WriteBits(1, 1)
 //   bw.WriteBits(3, 2)
 //   bw.WriteBits(4, 9)
+//   bw.Flush()
 //   // buf.String() == "\xa9"
 //
 package bitstream
