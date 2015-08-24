@@ -19,9 +19,21 @@
 //   input := strings.NewReader("\xa9") // == 1010 1001
 //   br := bitstream.NewReader(input)
 //   var hi, mid, lo uint64
-//   br.Read(1, &hi)   // hi  == 1
-//   br.Read(3, &mid)  // mid == 2
-//   br.Read(4, &lo)   // lo  == 9
+//   br.ReadBits(1, &hi)   // hi  == 1
+//   br.ReadBits(3, &mid)  // mid == 2
+//   br.ReadBits(4, &lo)   // lo  == 9
+//
+// A bitstream.Writer supports writing bits to a stream of bytes consumed by an
+// io.Writer.
+//
+// Writer example (leaving out error checking):
+//
+//   var output bytes.Buffer
+//   bw := bitstream.NewWriter(&output)
+//   bw.WriteBits(1, 1)
+//   bw.WriteBits(3, 2)
+//   bw.WriteBits(4, 9)
+//   // buf.String() == "\xa9"
 //
 package bitstream
 
@@ -33,6 +45,9 @@ import (
 
 // A Reader supports reading groups of 0 to 64 bits from the data supplied by
 // an io.Reader.
+//
+// The primary interface to a bitstream.Reader is the ReadBits method, but as a
+// convenience a *Reader also itself implements io.Reader.
 type Reader struct {
 	r io.Reader // source of additional input
 
@@ -45,16 +60,16 @@ type Reader struct {
 // ErrCountRange is returned when a bit count is < 0 or > 64.
 var ErrCountRange = errors.New("count is out of range")
 
-// Read reads the next (up to) count bits from the reader.  If v != nil, the
-// bits are copied into *v, where they occupy the low-order count bits.  In any
-// case, the number of bits read is returned.  It is an error if count < 0 or
-// count > 64.
+// ReadBits reads the next (up to) count bits from the reader.  If v != nil,
+// the bits are copied into *v, where they occupy the low-order count bits.  In
+// any case, the number of bits read is returned.  It is an error if count < 0
+// or count > 64.
 //
 // If err == nil, n == count.
 // If err == io.EOF, 0 ≤ n < count.
 // For any other error, n == 0.
 //
-func (r *Reader) Read(count int, v *uint64) (n int, err error) {
+func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 	if count < 0 || count > 64 {
 		return 0, ErrCountRange
 	}
@@ -116,6 +131,9 @@ func NewReader(r io.Reader) *Reader { return &Reader{r: r} }
 // A Writer supports writing groups of 0 to 64 bits to an underlying io.Writer.
 // Writes are buffered, so the caller must call Flush when finished to ensure
 // everything has been written out.
+//
+// The primary interface to a bitstream.Writer is the WriteBits method, but as
+// a convenience a *Writer also implements io.Writer.
 type Writer struct {
 	w io.Writer
 
@@ -127,14 +145,14 @@ type Writer struct {
 	nb  uint8 // 0 ≤ nb < 64
 }
 
-// Write appends the low-order count bits of v to the stream, and returns the
-// number of bits written.  It is an error if count < 0 or count > 64.
+// WriteBits appends the low-order count bits of v to the stream, and returns
+// the number of bits written.  It is an error if count < 0 or count > 64.
 //
 // Any other error is the result of a call to the underlying io.Writer.  When
 // that occurs, the write is abandoned and no bits are added to the stream.
 // For diagnostic purposes, the returned count is the byte count returned by
 // the failed io.Writer, but it is effectively 0 for the bitstream.
-func (w *Writer) Write(count int, v uint64) (int, error) {
+func (w *Writer) WriteBits(count int, v uint64) (int, error) {
 	if count < 0 || count > 64 {
 		return 0, ErrCountRange
 	}

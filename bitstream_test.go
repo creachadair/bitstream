@@ -22,7 +22,7 @@ func TestReader(t *testing.T) {
 
 	for want, n := range tests {
 		var got uint64
-		nr, err := r.Read(n, &got)
+		nr, err := r.ReadBits(n, &got)
 		t.Logf("Read(%d, &v) :: nr=%d, err=%v, value=%d", n, nr, err, got)
 		if err != nil {
 			t.Errorf("Read(%d, &v): unexpected error: %v", n, err)
@@ -40,7 +40,7 @@ func TestReader(t *testing.T) {
 	// handle the boundary case.
 	const askFor, bitsLeft, wantValue = 30, 6, 4
 	var got uint64
-	nr, err := r.Read(askFor, &got) // ask for more than there are
+	nr, err := r.ReadBits(askFor, &got) // ask for more than there are
 	if err != io.EOF {
 		t.Errorf("Read(%d, &v): got err=%v, wanted io.EOF", askFor, err)
 	}
@@ -84,15 +84,15 @@ func TestReaderErrors(t *testing.T) {
 	var got uint64
 
 	// Bounds checking on the count value.
-	if nr, err := r.Read(-1, &got); err == nil {
+	if nr, err := r.ReadBits(-1, &got); err == nil {
 		t.Errorf("Read(-1, &v): got nr=%d, value=%d; wanted error", nr, got)
 	}
-	if nr, err := r.Read(65, &got); err == nil {
+	if nr, err := r.ReadBits(65, &got); err == nil {
 		t.Errorf("Read(65, &v): got nr=%d, value=%d; wanted error", nr, got)
 	}
 
 	// A short read returns the available data and io.EOF.
-	nr, err := r.Read(64, &got)
+	nr, err := r.ReadBits(64, &got)
 	if err != io.EOF {
 		t.Error("Read(64, &v): got error %v, want %v", err, io.EOF)
 	}
@@ -102,7 +102,7 @@ func TestReaderErrors(t *testing.T) {
 
 	// An error other than io.EOF does not consume any data.
 	// This test mucks with the internals to simulate a failure.
-	if nr, err := r.Read(4, &got); err == nil {
+	if nr, err := r.ReadBits(4, &got); err == nil {
 		t.Errorf("Read(4, &v): got nr=%d, value=%d; wanted error", nr, got)
 	} else if err.Error() != "bogus" {
 		t.Error("Read(4, &v): unexpected error %v", err)
@@ -123,7 +123,7 @@ func TestWriter(t *testing.T) {
 	tests := []int{1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4}
 
 	for value, bits := range tests {
-		got, err := w.Write(bits, uint64(value))
+		got, err := w.WriteBits(bits, uint64(value))
 		t.Logf("Write(%d, %v) :: nw=%d, err=%v", bits, value, got, err)
 		if err != nil {
 			t.Errorf("Write(%d, %d): unexpected error: %v", bits, value, err)
@@ -136,7 +136,7 @@ func TestWriter(t *testing.T) {
 
 	// Write the 6-bit coda...
 	const codaBits, codaValue = 6, 4
-	if nw, err := w.Write(codaBits, codaValue); err != nil {
+	if nw, err := w.WriteBits(codaBits, codaValue); err != nil {
 		t.Errorf("Write(%d, %d): unexpected error: %v", codaBits, codaValue, err)
 	} else if nw != codaBits {
 		t.Errorf("Write(%d, %d): wrote %d bits, wanted 6", codaBits, codaValue, nw)
@@ -162,10 +162,10 @@ func TestWriterErrors(t *testing.T) {
 	w := NewWriter(fail)
 
 	// Bounds checking on the count value.
-	if nw, err := w.Write(-1, 0); err == nil {
+	if nw, err := w.WriteBits(-1, 0); err == nil {
 		t.Errorf("Write(-1, 0): got nw=%d; wanted error", nw)
 	}
-	if nw, err := w.Write(65, 0); err == nil {
+	if nw, err := w.WriteBits(65, 0); err == nil {
 		t.Errorf("Write(65, 0): got nw=%d; wanted error", nw)
 	}
 
@@ -174,7 +174,7 @@ func TestWriterErrors(t *testing.T) {
 	const writeValue = 31
 
 	// Writing without overflowing the internal buffer should not give an error.
-	if nw, err := w.Write(okBits, writeValue); err != nil {
+	if nw, err := w.WriteBits(okBits, writeValue); err != nil {
 		t.Errorf("Write(%d, %d): unexpected error: %v", okBits, writeValue, err)
 	} else if nw != 5 {
 		t.Errorf("Write(%d, %d): wrote %d bits, wanted %d", okBits, writeValue, nw, okBits)
@@ -183,7 +183,7 @@ func TestWriterErrors(t *testing.T) {
 	saveBits := w.nb
 
 	// Writing enough to trigger a "real" write should give back an error.
-	if nw, err := w.Write(failBits, 0); err == nil {
+	if nw, err := w.WriteBits(failBits, 0); err == nil {
 		t.Errorf("Write(%d, 0): got %d, expected error", failBits, nw)
 	}
 
@@ -193,5 +193,62 @@ func TestWriterErrors(t *testing.T) {
 	}
 	if w.nb != saveBits {
 		t.Errorf("Write error clobbered the bit count: got %d, want %d", w.nb, saveBits)
+	}
+}
+
+func TestReadBytes(t *testing.T) {
+	const input = "0123456789abcd"
+
+	for _, want := range []string{"", "0", "012", "0123456789", input} {
+		in := strings.NewReader(input)
+		r := NewReader(in)
+
+		buf := make([]byte, len(want))
+		nr, err := r.Read(buf)
+		if err != nil {
+			t.Errorf("ReadBytes(r, #%d): unexpected error: %v", len(buf), err)
+		}
+		if nr != len(want) {
+			t.Errorf("ReadBytes(r, #%d): got %d bytes, wanted %d", len(buf), nr, len(want))
+		}
+		if got := string(buf[:nr]); got != want {
+			t.Errorf("ReadBytes(r, #%d): got %q, want %q", len(buf), got, want)
+		}
+	}
+
+	// Make sure that requesting more than the stream has returns io.EOF and
+	// consumes the entire input.
+	in := strings.NewReader(input)
+	r := NewReader(in)
+	buf := make([]byte, len(input)+10)
+	nr, err := r.Read(buf)
+	if err != io.EOF {
+		t.Errorf("ReadBytes(r, #%d): got error %v, wanted %v", err, io.EOF)
+	}
+	if nr != len(input) {
+		t.Errorf("ReadBytes(r, #%d): got %d bytes, wanted %d", len(buf), nr, len(input))
+	}
+	if got := string(buf[:nr]); got != input {
+		t.Errorf("ReadBytes(r, #%d): got %q, want %q", len(buf), got, input)
+	}
+}
+
+func TestWriteBytes(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	const input = "Tis true, tis pity; and pity tis, tis true."
+	nw, err := w.Write([]byte(input))
+	if err != nil {
+		t.Errorf("WriteBytes(w, %q): unexpected error: %v", input, err)
+	}
+	if nw != len(input) {
+		t.Errorf("WriteBytes(w, %q): wrote %d bits, wanted %d", input, nw, len(input))
+	}
+	if err := w.Flush(); err != nil {
+		t.Errorf("Flush failed: unexpected error: %v", err)
+	}
+	if got := buf.String(); got != input {
+		t.Errorf("Final result: got %q, want %q", got, input)
 	}
 }
