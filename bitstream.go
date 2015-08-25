@@ -177,8 +177,7 @@ func (w *Writer) WriteBits(count int, v uint64) (int, error) {
 	if nused == 64 {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, out)
-		flipBits(buf)
-		nw, err := w.w.Write(buf)
+		nw, err := w.w.Write(flipBits(buf))
 		if err != nil {
 			return nw, err // write failed; don't update anything
 		}
@@ -208,12 +207,11 @@ func (w *Writer) Flush() error {
 		out := w.buf << uint(w.Padding())
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, out)
-		flipBits(buf)
 
 		// When flushing, the buffer may not be full; so skip any leading bytes
 		// that are not part of the padded output.
 		skip := 8 - (w.nb+7)/8
-		if _, err := w.w.Write(buf[skip:]); err != nil {
+		if _, err := w.w.Write(flipBits(buf[skip:])); err != nil {
 			return err
 		}
 		w.nb = 0
