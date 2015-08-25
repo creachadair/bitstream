@@ -8,12 +8,19 @@ import (
 	"testing"
 )
 
+// A bit stream for testing, constructed from the concatenation of the binary
+// encodings of the integers 0 ≤ i < 16.
+//
+//  0 1 10 11 100 101 110 111 1000 1001 1010 1011 1100 1101 1110 1111 00 0100
+//  \----------/\---------/\--------/\--------/\--------/\--------/\--------/
+//
+// When bit-reversed:
+//  = 0111 0110   1011 1010  0100 0111 0101 0110 1100 1111 1101 1110 0010 0011
+//  = 7    6      B    A     4    7    5    6    C    F    D    E    2    3
+const testStream = "\x76\xBA\x47\x56\xCF\xDE\x23"
+
 func TestReader(t *testing.T) {
-	// Input bit stream:
-	// 0 1 10 11 100 101 110 111 1000 1001 1010 1011 1100 1101 1110 1111 00 0100
-	// == 0110 1110 0101 1101 1110 0010 0110 1010 1111 0011 0111 1011 1100 0100
-	// == 6    E    5    D    E    2    6    A    F    3    7    B    C    4
-	in := strings.NewReader("\x6E\x5D\xE2\x6A\xF3\x7B\xC4")
+	in := strings.NewReader(testStream)
 	r := NewReader(in)
 
 	// Each "test" is a number of bits to read.  The desired value of the read
@@ -23,16 +30,16 @@ func TestReader(t *testing.T) {
 	for want, n := range tests {
 		var got uint64
 		nr, err := r.ReadBits(n, &got)
-		t.Logf("Read(%d, &v) :: nr=%d, err=%v, value=%d", n, nr, err, got)
+		t.Logf("ReadBits(%d, &v) :: nr=%d, err=%v, value=%d", n, nr, err, got)
 		if err != nil {
-			t.Errorf("Read(%d, &v): unexpected error: %v", n, err)
+			t.Errorf("ReadBits(%d, &v): unexpected error: %v", n, err)
 			continue
 		}
 		if nr != n {
-			t.Errorf("Read(%d, &v): read %d bits, wanted %d", nr, n)
+			t.Errorf("ReadBits(%d, &v): read %d bits, wanted %d", nr, n)
 		}
 		if got != uint64(want) {
-			t.Errorf("Read(%d, &v): got value %d, want %d", got, want)
+			t.Errorf("ReadBits(%d, &v): got value %d, want %d", n, got, want)
 		}
 	}
 
@@ -42,13 +49,13 @@ func TestReader(t *testing.T) {
 	var got uint64
 	nr, err := r.ReadBits(askFor, &got) // ask for more than there are
 	if err != io.EOF {
-		t.Errorf("Read(%d, &v): got err=%v, wanted io.EOF", askFor, err)
+		t.Errorf("ReadBits(%d, &v): got err=%v, wanted io.EOF", askFor, err)
 	}
 	if nr != bitsLeft {
-		t.Errorf("Read(%d, &v): got %d bits, wanted %d", askFor, nr, bitsLeft)
+		t.Errorf("ReadBits(%d, &v): got %d bits, wanted %d", askFor, nr, bitsLeft)
 	}
 	if got != wantValue {
-		t.Errorf("Read(%d, &v): got value %d, want %d", askFor, got, wantValue)
+		t.Errorf("ReadBits(%d, &v): got value %d, want %d", askFor, got, wantValue)
 	}
 }
 
@@ -110,16 +117,12 @@ func TestReaderErrors(t *testing.T) {
 }
 
 func TestWriter(t *testing.T) {
-	// Expected output bit stream:
-	// 0 1 10 11 100 101 110 111 1000 1001 1010 1011 1100 1101 1110 1111 00 0100
-	// == 0110 1110 0101 1101 1110 0010 0110 1010 1111 0011 0111 1011 1100 0100
-	// == 6    E    5    D    E    2    6    A    F    3    7    B    C    4
-	const want = "\x6E\x5D\xE2\x6A\xF3\x7B\xC4"
 	var buf bytes.Buffer
 	w := NewWriter(&buf)
 
 	// Each "test" is a number of bits to write.  The value to write is the
 	// index of the test (i.e., for test[i] we write the value i).
+	// This should produce testStream.
 	tests := []int{1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4}
 
 	for value, bits := range tests {
@@ -147,8 +150,8 @@ func TestWriter(t *testing.T) {
 		t.Errorf("Flush: unexpected error: %v", err)
 	}
 
-	if got := buf.String(); got != want {
-		t.Errorf("Final result: got %q, want %q", got, want)
+	if got := buf.String(); got != testStream {
+		t.Errorf("Final result: got %q, want %q", got, testStream)
 	}
 }
 
@@ -197,10 +200,13 @@ func TestWriterErrors(t *testing.T) {
 }
 
 func TestReadBytes(t *testing.T) {
-	const input = "0123456789abcd"
+	const original = "0123456789abcd"
 
-	for _, want := range []string{"", "0", "012", "0123456789", input} {
-		in := strings.NewReader(input)
+	// When encoded, original will have its bits fipped.
+	input := flipBits([]byte(original))
+
+	for _, want := range []string{"", "0", "012", "0123456789", original} {
+		in := bytes.NewReader(input)
 		r := NewReader(in)
 
 		buf := make([]byte, len(want))
@@ -218,7 +224,7 @@ func TestReadBytes(t *testing.T) {
 
 	// Make sure that requesting more than the stream has returns io.EOF and
 	// consumes the entire input.
-	in := strings.NewReader(input)
+	in := bytes.NewReader(input)
 	r := NewReader(in)
 	buf := make([]byte, len(input)+10)
 	nr, err := r.Read(buf)
@@ -228,8 +234,8 @@ func TestReadBytes(t *testing.T) {
 	if nr != len(input) {
 		t.Errorf("ReadBytes(r, #%d): got %d bytes, wanted %d", len(buf), nr, len(input))
 	}
-	if got := string(buf[:nr]); got != input {
-		t.Errorf("ReadBytes(r, #%d): got %q, want %q", len(buf), got, input)
+	if got := string(buf[:nr]); got != original {
+		t.Errorf("ReadBytes(r, #%d): got %q, want %q", len(buf), got, original)
 	}
 }
 
@@ -248,7 +254,42 @@ func TestWriteBytes(t *testing.T) {
 	if err := w.Flush(); err != nil {
 		t.Errorf("Flush failed: unexpected error: %v", err)
 	}
-	if got := buf.String(); got != input {
-		t.Errorf("Final result: got %q, want %q", got, input)
+
+	// When encoded, the input will have its bits flipped.
+	encoded := flipBits([]byte(input))
+	if got := buf.Bytes(); !bytes.Equal(got, encoded) {
+		t.Errorf("Final result: got %q, want %q", string(got), string(encoded))
+	}
+}
+
+func TestRoundTrip(t *testing.T) {
+	for _, input := range []string{"", "a", "ab", "abc", "abcdefghijklmopqrstuv", "01a23"} {
+		var buf bytes.Buffer
+		w := NewWriter(&buf)
+		nw, err := w.Write([]byte(input))
+		if err != nil {
+			t.Errorf("Write %q failed: %v", input, err)
+			continue
+		}
+		if nw != len(input) {
+			t.Errorf("Write %q: wrote %d bytes, wanted %d", input, nw, len(input))
+		}
+		if err := w.Flush(); err != nil {
+			t.Errorf("Flush failed: %v", err)
+		}
+
+		r := NewReader(&buf)
+		got := make([]byte, len(input))
+		nr, err := r.Read(got)
+		if err != nil {
+			t.Errorf("Read failed: %v", err)
+			continue
+		}
+		if nr != len(input) {
+			t.Errorf("Read returned %d bytes, wanted %d", nr, len(input))
+		}
+		if string(got) != input {
+			t.Errorf("Read: got %q, want %q", string(got), input)
+		}
 	}
 }
