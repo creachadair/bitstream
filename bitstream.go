@@ -33,11 +33,11 @@
 //
 //   var output bytes.Buffer
 //   bw := bitstream.NewWriter(&output)
-//   bw.WriteBits(1, 1)
-//   bw.WriteBits(3, 2)
-//   bw.WriteBits(4, 9)
+//   bw.WriteBits(2, 1) // 01
+//   bw.WriteBits(3, 2) //   0000
+//   bw.WriteBits(4, 9) //       01
 //   bw.Flush()
-//   // buf.String() == "\xa9"
+//   // output.String() == "A"
 //
 package bitstream
 

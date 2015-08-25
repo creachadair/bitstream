@@ -3,9 +3,12 @@ package bitstream
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
+
+	"bitbucket.org/creachadair/bitstream"
 )
 
 // A bit stream for testing, constructed from the concatenation of the binary
@@ -292,4 +295,26 @@ func TestRoundTrip(t *testing.T) {
 			t.Errorf("Read: got %q, want %q", string(got), input)
 		}
 	}
+}
+
+func ExampleReadBits() {
+	input := strings.NewReader("\xa9") // == 1010 1001
+	br := bitstream.NewReader(input)
+	var hi, mid, lo uint64
+	br.ReadBits(1, &hi)  // hi  == 1
+	br.ReadBits(3, &mid) // mid == 2
+	br.ReadBits(4, &lo)  // lo  == 9
+	fmt.Printf("hi=%d mid=%d lo=%d", hi, mid, lo)
+	// Output: hi=1 mid=2 lo=9
+}
+
+func ExampleWriteBits() {
+	var output bytes.Buffer
+	bw := bitstream.NewWriter(&output)
+	bw.WriteBits(2, 1)
+	bw.WriteBits(4, 0)
+	bw.WriteBits(2, 1)
+	bw.Flush()
+	fmt.Print(output.String())
+	// Output: A
 }
