@@ -45,7 +45,7 @@ func TestReader(t *testing.T) {
 				continue
 			}
 			if nr != n {
-				t.Errorf("ReadBits(%d, &v): read %d bits, wanted %d", nr, n)
+				t.Errorf("ReadBits(%d, &v): read %d bits, wanted %d", n, nr, n)
 			}
 			if got != uint64(want) {
 				t.Errorf("ReadBits(%d, &v): got value %d, want %d", n, got, want)
@@ -95,7 +95,7 @@ func TestReaderErrors(t *testing.T) {
 	// A short read returns the available data and io.EOF.
 	nr, err := r.ReadBits(64, &got)
 	if err != io.EOF {
-		t.Error("Read(64, &v): got error %v, want %v", err, io.EOF)
+		t.Errorf("Read(64, &v): got error %v, want %v", err, io.EOF)
 	}
 	if nr != 32 {
 		t.Errorf("Read(64, &v): read %d bits, wanted %d", nr, 32)
@@ -106,7 +106,7 @@ func TestReaderErrors(t *testing.T) {
 	if nr, err := r.ReadBits(4, &got); err == nil {
 		t.Errorf("Read(4, &v): got nr=%d, value=%d; wanted error", nr, got)
 	} else if err.Error() != "bogus" {
-		t.Error("Read(4, &v): unexpected error %v", err)
+		t.Errorf("Read(4, &v): unexpected error %v", err)
 	}
 }
 
