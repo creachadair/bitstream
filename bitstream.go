@@ -40,14 +40,14 @@ import (
 )
 
 type options struct {
-	flipBits bool // whether to bit-reverse bytes on input
+	flipBits func([]byte) []byte // bit inverter
 }
 
 // An Option configures the behaviour of a Reader or Writer.
 type Option func(*options)
 
 func newOptions(opts []Option) *options {
-	var o options
+	o := options{flipBits: noFlip}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -57,12 +57,12 @@ func newOptions(opts []Option) *options {
 // MSBFirst is an Option to pack the bits of each byte from most to least
 // significant, i.e., the bit sequence 0 1 0 0 1 1 0 1 would be packed into a
 // single byte with value 0x4D.  This is the default if no options are given.
-func MSBFirst(o *options) { o.flipBits = false }
+func MSBFirst(o *options) { o.flipBits = noFlip }
 
 // LSBFirst is an Option to pack the bits of each byte from least to most
 // significant, i.e., the bit sequence 0 1 0 0 1 1 0 1 would be packed into a
 // single byte with value 0xB2.
-func LSBFirst(o *options) { o.flipBits = true }
+func LSBFirst(o *options) { o.flipBits = flipBits }
 
 // A Reader supports reading groups of 0 to 64 bits from the data supplied by
 // an io.Reader.
@@ -70,8 +70,8 @@ func LSBFirst(o *options) { o.flipBits = true }
 // The primary interface to a bitstream.Reader is the ReadBits method, but as a
 // convenience a *Reader also itself implements io.Reader.
 type Reader struct {
-	r    io.Reader // source of additional input
-	flip bool      // whether to bit-reverse bytes on input
+	r    io.Reader           // source of additional input
+	flip func([]byte) []byte // bit inverter
 
 	// The low-order nb bits of buf hold data read from r but not yet delivered
 	// to the reader.  Any bits with index ≥ nb are garbage.
@@ -124,7 +124,7 @@ func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 		// having to short the caller.
 		err = nil
 
-		r.buf = binary.BigEndian.Uint64(r.flipBits(buf[nr:]))
+		r.buf = binary.BigEndian.Uint64(r.flip(buf[nr:]))
 		r.nb = 8 * uint8(nr)
 
 		nleft := ucount - nbits // how many bits we still need to copy
@@ -147,13 +147,6 @@ func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 	return int(nbits), err
 }
 
-func (r *Reader) flipBits(data []byte) []byte {
-	if r.flip {
-		return flipBits(data)
-	}
-	return data
-}
-
 // NewReader returns a bitstream reader that consumes data from r.
 func NewReader(r io.Reader, opts ...Option) *Reader {
 	o := newOptions(opts)
@@ -168,7 +161,7 @@ func NewReader(r io.Reader, opts ...Option) *Reader {
 // a convenience a *Writer also implements io.Writer.
 type Writer struct {
 	w    io.Writer
-	flip bool // whether to bit-reverse bytes on write
+	flip func([]byte) []byte // bit inverter
 
 	// The low-order nb bits of buf hold the bits that have been received by
 	// calls to Write but not yet delivered to w.  We maintain the invariant
@@ -206,7 +199,7 @@ func (w *Writer) WriteBits(count int, v uint64) (int, error) {
 	if nused == 64 {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, out)
-		nw, err := w.w.Write(w.flipBits(buf))
+		nw, err := w.w.Write(w.flip(buf))
 		if err != nil {
 			return nw, err // write failed; don't update anything
 		}
@@ -240,7 +233,7 @@ func (w *Writer) Flush() error {
 		// When flushing, the buffer may not be full; so skip any leading bytes
 		// that are not part of the padded output.
 		skip := 8 - (w.nb+7)/8
-		if _, err := w.w.Write(w.flipBits(buf[skip:])); err != nil {
+		if _, err := w.w.Write(w.flip(buf[skip:])); err != nil {
 			return err
 		}
 		w.nb = 0
@@ -248,19 +241,9 @@ func (w *Writer) Flush() error {
 	return nil
 }
 
-func (w *Writer) flipBits(data []byte) []byte {
-	if w.flip {
-		return flipBits(data)
-	}
-	return data
-}
-
 // NewWriter returns a bitstream writer that delivers output to w.
 func NewWriter(w io.Writer, opts ...Option) *Writer {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
-	}
+	o := newOptions(opts)
 	return &Writer{w: w, flip: o.flipBits}
 }
 
@@ -308,3 +291,5 @@ func flipBits(data []byte) []byte {
 	}
 	return data
 }
+
+func noFlip(data []byte) []byte { return data }
