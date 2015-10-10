@@ -22,8 +22,8 @@
 //   var output bytes.Buffer
 //   bw := bitstream.NewWriter(&output)
 //   bw.WriteBits(2, 1) // 01
-//   bw.WriteBits(3, 2) //   0000
-//   bw.WriteBits(4, 9) //       01
+//   bw.WriteBits(4, 0) //   0000
+//   bw.WriteBits(2, 1) //       01
 //   bw.Flush()
 //   // output.String() == "A"
 //
