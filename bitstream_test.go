@@ -281,7 +281,7 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-func ExampleReadBits() {
+func ExampleReader_ReadBits() {
 	input := strings.NewReader("\xa9") // == 1010 1001
 	br := NewReader(input)
 	var hi, mid, lo uint64
@@ -292,7 +292,7 @@ func ExampleReadBits() {
 	// Output: hi=1 mid=2 lo=9
 }
 
-func ExampleWriteBits() {
+func ExampleWriter_WriteBits() {
 	var output bytes.Buffer
 	bw := NewWriter(&output)
 	bw.WriteBits(2, 1)
