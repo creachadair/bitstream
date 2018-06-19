@@ -1,5 +1,7 @@
 # Bitstream
 
+http://godoc.org/bitbucket.org/creachadair/bitstream
+
 Package `bitstream` is a library for reading and writing streams of bits.
 
 A `bitstream.Reader` supports reading variable-width bit fields sequentially
@@ -15,6 +17,3 @@ sequential processing, not random-access.
 
 Bit values are exchanged as `uint64` values, with the data packed into the
 low-order bits of the word.
-
-View documentation on
-[godoc.org](http://godoc.org/bitbucket.org/creachadair/bitstream).
