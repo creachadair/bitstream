@@ -42,11 +42,11 @@ import (
 // Options control the behaviour of a reader or writer. A nil *Options is
 // equivalent to a zero-valued Options.
 type Options struct {
-	// If true, bits of the stream are packed into bytes from the lowest to
-	// highest order. For example, the bit sequence 0 1 0 0 1 1 0 1 produces a
-	// byte with value 0xB2.
+	// If true, bits of the stream are packed into bytes from lowest to highest
+	// order. For example, the bit sequence 0 1 0 0 1 1 0 1 produces a byte with
+	// value 0xB2.
 	//
-	// If false, bits are packed into bytes from hightest to lowest order. For
+	// If false, bits are packed into bytes from highest to lowest order. For
 	// example, the bit sequence 0 1 0 0 1 1 0 1 produces a byte with the value
 	// 0x4D.
 	LowBitFirst bool
