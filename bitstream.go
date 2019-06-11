@@ -8,7 +8,7 @@
 // Reader example (leaving out error checking):
 //
 //   input := strings.NewReader("\xa9") // == 1010 1001
-//   br := bitstream.NewReader(input)
+//   br := bitstream.NewReader(input, nil)
 //   var hi, mid, lo uint64
 //   br.ReadBits(1, &hi)   // hi  == 1
 //   br.ReadBits(3, &mid)  // mid == 2
@@ -20,7 +20,7 @@
 // Writer example (leaving out error checking):
 //
 //   var output bytes.Buffer
-//   bw := bitstream.NewWriter(&output)
+//   bw := bitstream.NewWriter(&output, nil)
 //   bw.WriteBits(2, 1) // 01
 //   bw.WriteBits(4, 0) //   0000
 //   bw.WriteBits(2, 1) //       01
@@ -28,8 +28,8 @@
 //   // output.String() == "A"
 //
 // When a stream is encoded as bytes for I/O, the bits may be packed into bytes
-// either from most to least significant, or vice versa.  This behaviour can be
-// controlled by the bitstream.MSBFirst and bitstream.LSBFirst options.
+// either from most to least significant, or vice versa.  This behaviour is
+// controlled by the LowBitFirst field of the Options struct.
 //
 package bitstream
 
