@@ -39,30 +39,27 @@ import (
 	"io"
 )
 
-type options struct {
-	flipBits func([]byte) []byte // bit inverter
+// Options control the behaviour of a reader or writer. A nil *Options is
+// equivalent to a zero-valued Options.
+type Options struct {
+	// If true, bits of the stream are packed into bytes from the lowest to
+	// highest order. For example, the bit sequence 0 1 0 0 1 1 0 1 produces a
+	// byte with value 0xB2.
+	//
+	// If false, bits are packed into bytes from hightest to lowest order. For
+	// example, the bit sequence 0 1 0 0 1 1 0 1 produces a byte with the value
+	// 0x4D.
+	LowBitFirst bool
 }
 
-// An Option configures the behaviour of a Reader or Writer.
-type Option func(*options)
-
-func newOptions(opts []Option) *options {
-	o := options{flipBits: noFlip}
-	for _, opt := range opts {
-		opt(&o)
+func (o *Options) flipBits(data []byte) []byte {
+	if o != nil && o.LowBitFirst {
+		for i, b := range data {
+			data[i] = bitReverse[b]
+		}
 	}
-	return &o
+	return data
 }
-
-// MSBFirst is an Option to pack the bits of each byte from most to least
-// significant, i.e., the bit sequence 0 1 0 0 1 1 0 1 would be packed into a
-// single byte with value 0x4D.  This is the default if no options are given.
-func MSBFirst(o *options) { o.flipBits = noFlip }
-
-// LSBFirst is an Option to pack the bits of each byte from least to most
-// significant, i.e., the bit sequence 0 1 0 0 1 1 0 1 would be packed into a
-// single byte with value 0xB2.
-func LSBFirst(o *options) { o.flipBits = flipBits }
 
 // A Reader supports reading groups of 0 to 64 bits from the data supplied by
 // an io.Reader.
@@ -70,8 +67,8 @@ func LSBFirst(o *options) { o.flipBits = flipBits }
 // The primary interface to a bitstream.Reader is the ReadBits method, but as a
 // convenience a *Reader also itself implements io.Reader.
 type Reader struct {
-	r    io.Reader           // source of additional input
-	flip func([]byte) []byte // bit inverter
+	r    io.Reader // source of additional input
+	opts *Options  // reader options
 
 	// The low-order nb bits of buf hold data read from r but not yet delivered
 	// to the reader.  Any bits with index ≥ nb are garbage.
@@ -124,7 +121,7 @@ func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 		// having to short the caller.
 		err = nil
 
-		r.buf = binary.BigEndian.Uint64(r.flip(buf[nr:]))
+		r.buf = binary.BigEndian.Uint64(r.opts.flipBits(buf[nr:]))
 		r.nb = 8 * uint8(nr)
 
 		nleft := ucount - nbits // how many bits we still need to copy
@@ -148,10 +145,7 @@ func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 }
 
 // NewReader returns a bitstream reader that consumes data from r.
-func NewReader(r io.Reader, opts ...Option) *Reader {
-	o := newOptions(opts)
-	return &Reader{r: r, flip: o.flipBits}
-}
+func NewReader(r io.Reader, opts *Options) *Reader { return &Reader{r: r, opts: opts} }
 
 // A Writer supports writing groups of 0 to 64 bits to an underlying io.Writer.
 // Writes are buffered, so the caller must call Flush when finished to ensure
@@ -161,7 +155,7 @@ func NewReader(r io.Reader, opts ...Option) *Reader {
 // a convenience a *Writer also implements io.Writer.
 type Writer struct {
 	w    io.Writer
-	flip func([]byte) []byte // bit inverter
+	opts *Options // writer options
 
 	// The low-order nb bits of buf hold the bits that have been received by
 	// calls to Write but not yet delivered to w.  We maintain the invariant
@@ -199,7 +193,7 @@ func (w *Writer) WriteBits(count int, v uint64) (int, error) {
 	if nused == 64 {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, out)
-		nw, err := w.w.Write(w.flip(buf))
+		nw, err := w.w.Write(w.opts.flipBits(buf))
 		if err != nil {
 			return nw, err // write failed; don't update anything
 		}
@@ -233,7 +227,7 @@ func (w *Writer) Flush() error {
 		// When flushing, the buffer may not be full; so skip any leading bytes
 		// that are not part of the padded output.
 		skip := 8 - (w.nb+7)/8
-		if _, err := w.w.Write(w.flip(buf[skip:])); err != nil {
+		if _, err := w.w.Write(w.opts.flipBits(buf[skip:])); err != nil {
 			return err
 		}
 		w.nb = 0
@@ -242,13 +236,10 @@ func (w *Writer) Flush() error {
 }
 
 // NewWriter returns a bitstream writer that delivers output to w.
-func NewWriter(w io.Writer, opts ...Option) *Writer {
-	o := newOptions(opts)
-	return &Writer{w: w, flip: o.flipBits}
-}
+func NewWriter(w io.Writer, opts *Options) *Writer { return &Writer{w: w, opts: opts} }
 
 // bitReverse maps each byte value to its bit reversal.
-var bitReverse = []byte{
+var bitReverse = [...]byte{
 	0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
 	0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
 	0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8,
@@ -282,14 +273,3 @@ var bitReverse = []byte{
 	0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
 	0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
 }
-
-// flipBits reverses the bits of each element of data in-place.
-// Returns its argument.
-func flipBits(data []byte) []byte {
-	for i, b := range data {
-		data[i] = bitReverse[int(b)]
-	}
-	return data
-}
-
-func noFlip(data []byte) []byte { return data }

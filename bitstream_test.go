@@ -25,11 +25,14 @@ import (
 const msbTestStream = "\x6e\x5d\xe2\x6a\xf3\x7b\xd0"
 const lsbTestStream = "\x76\xba\x47\x56\xcf\xde\x0b"
 
-func flipped(s string) string { return string(flipBits([]byte(s))) }
+func flipped(s string) string {
+	o := &Options{LowBitFirst: true}
+	return string(o.flipBits([]byte(s)))
+}
 
 func TestReader(t *testing.T) {
-	rmsb := NewReader(strings.NewReader(msbTestStream), MSBFirst)
-	rlsb := NewReader(strings.NewReader(lsbTestStream), LSBFirst)
+	rmsb := NewReader(strings.NewReader(msbTestStream), &Options{LowBitFirst: false})
+	rlsb := NewReader(strings.NewReader(lsbTestStream), &Options{LowBitFirst: true})
 
 	// Each "test" is a number of bits to read.  The desired value of the read
 	// is the index of the test (i.e., for test[i] we want the value i).
@@ -80,7 +83,7 @@ func (e *errReader) Read(data []byte) (int, error) {
 }
 
 func TestReaderErrors(t *testing.T) {
-	r := NewReader(newErrReader("blah", errors.New("bogus")))
+	r := NewReader(newErrReader("blah", errors.New("bogus")), nil)
 
 	var got uint64
 
@@ -112,8 +115,8 @@ func TestReaderErrors(t *testing.T) {
 
 func TestWriter(t *testing.T) {
 	var mbuf, lbuf bytes.Buffer
-	wmsb := NewWriter(&mbuf, MSBFirst)
-	wlsb := NewWriter(&lbuf, LSBFirst)
+	wmsb := NewWriter(&mbuf, nil)
+	wlsb := NewWriter(&lbuf, &Options{LowBitFirst: true})
 
 	// Each "test" is a number of bits to write.  The value to write is the
 	// index of the test (i.e., for test[i] we write the value i).
@@ -151,7 +154,7 @@ func (e errWriter) Write([]byte) (int, error) { return 0, errors.New(string(e)) 
 
 func TestWriterErrors(t *testing.T) {
 	fail := errWriter("bogus")
-	w := NewWriter(fail, LSBFirst)
+	w := NewWriter(fail, &Options{LowBitFirst: true})
 
 	// Bounds checking on the count value.
 	if nw, err := w.WriteBits(-1, 0); err == nil {
@@ -192,10 +195,10 @@ func TestReadBytes(t *testing.T) {
 	const baseValue = "0123456789abcd"
 	tests := []struct {
 		input string
-		opt   Option
+		opt   *Options
 	}{
-		{baseValue, MSBFirst},
-		{flipped(baseValue), LSBFirst},
+		{baseValue, nil},
+		{flipped(baseValue), &Options{LowBitFirst: true}},
 	}
 	for _, test := range tests {
 		buf := make([]byte, 2*len(test.input))
@@ -220,8 +223,8 @@ func TestReadBytes(t *testing.T) {
 
 func TestWriteBytes(t *testing.T) {
 	var mbuf, lbuf bytes.Buffer
-	wmsb := NewWriter(&mbuf, MSBFirst)
-	wlsb := NewWriter(&lbuf, LSBFirst)
+	wmsb := NewWriter(&mbuf, nil)
+	wlsb := NewWriter(&lbuf, &Options{LowBitFirst: true})
 
 	const input = "Tis true, tis pity; and pity tis, tis true."
 	for _, w := range []*Writer{wmsb, wlsb} {
@@ -246,7 +249,7 @@ func TestWriteBytes(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	for _, input := range []string{"", "a", "ab", "abc", "abcdefghijklmopqrstuv", "01a23"} {
-		for _, opt := range []Option{MSBFirst, LSBFirst} {
+		for _, opt := range []*Options{nil, {LowBitFirst: true}} {
 			var buf bytes.Buffer
 
 			// Write the input out to the buffer.
@@ -283,7 +286,7 @@ func TestRoundTrip(t *testing.T) {
 
 func ExampleReader_ReadBits() {
 	input := strings.NewReader("\xa9") // == 1010 1001
-	br := NewReader(input)
+	br := NewReader(input, nil)
 	var hi, mid, lo uint64
 	br.ReadBits(1, &hi)  // hi  == 1
 	br.ReadBits(3, &mid) // mid == 2
@@ -294,7 +297,7 @@ func ExampleReader_ReadBits() {
 
 func ExampleWriter_WriteBits() {
 	var output bytes.Buffer
-	bw := NewWriter(&output)
+	bw := NewWriter(&output, nil)
 	bw.WriteBits(2, 1)
 	bw.WriteBits(4, 0)
 	bw.WriteBits(2, 1)
