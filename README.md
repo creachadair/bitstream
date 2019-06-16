@@ -1,6 +1,6 @@
 # Bitstream
 
-http://godoc.org/bitbucket.org/creachadair/bitstream
+http://godoc.org/github.com/creachadair/bitstream
 
 Package `bitstream` is a library for reading and writing streams of bits.
 
