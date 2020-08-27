@@ -1,6 +1,7 @@
 # Bitstream
 
-http://godoc.org/github.com/creachadair/bitstream
+[![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=blue)](https://pkg.go.dev/github.com/creachadair/bitstream)
+[![Go Report Card](https://goreportcard.com/badge/github.com/creachadair/atomicfile)](https://goreportcard.com/report/github.com/creachadair/bitstream)
 
 Package `bitstream` is a library for reading and writing streams of bits.
 
