@@ -1,3 +1,3 @@
 module github.com/creachadair/bitstream
 
-go 1.14
+go 1.17
