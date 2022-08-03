@@ -7,30 +7,29 @@
 //
 // Reader example (leaving out error checking):
 //
-//   input := strings.NewReader("\xa9") // == 1010 1001
-//   br := bitstream.NewReader(input, nil)
-//   var hi, mid, lo uint64
-//   br.ReadBits(1, &hi)   // hi  == 1
-//   br.ReadBits(3, &mid)  // mid == 2
-//   br.ReadBits(4, &lo)   // lo  == 9
+//	input := strings.NewReader("\xa9") // == 1010 1001
+//	br := bitstream.NewReader(input, nil)
+//	var hi, mid, lo uint64
+//	br.ReadBits(1, &hi)   // hi  == 1
+//	br.ReadBits(3, &mid)  // mid == 2
+//	br.ReadBits(4, &lo)   // lo  == 9
 //
 // A bitstream.Writer supports writing bits to a stream of bytes consumed by an
 // io.Writer.
 //
 // Writer example (leaving out error checking):
 //
-//   var output bytes.Buffer
-//   bw := bitstream.NewWriter(&output, nil)
-//   bw.WriteBits(2, 1) // 01
-//   bw.WriteBits(4, 0) //   0000
-//   bw.WriteBits(2, 1) //       01
-//   bw.Flush()
-//   // output.String() == "A"
+//	var output bytes.Buffer
+//	bw := bitstream.NewWriter(&output, nil)
+//	bw.WriteBits(2, 1) // 01
+//	bw.WriteBits(4, 0) //   0000
+//	bw.WriteBits(2, 1) //       01
+//	bw.Flush()
+//	// output.String() == "A"
 //
 // When a stream is encoded as bytes for I/O, the bits may be packed into bytes
 // either from most to least significant, or vice versa.  This behaviour is
 // controlled by the LowBitFirst field of the Options struct.
-//
 package bitstream
 
 import (
@@ -87,7 +86,6 @@ var ErrCountRange = errors.New("count is out of range")
 // If err == nil, n == count.
 // If err == io.EOF, 0 ≤ n < count.
 // For any other error, n == 0.
-//
 func (r *Reader) ReadBits(count int, v *uint64) (n int, err error) {
 	if count < 0 || count > 64 {
 		return 0, ErrCountRange

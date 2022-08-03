@@ -11,17 +11,20 @@ import (
 
 // A bit stream for testing, constructed by concatenating the binary encodings
 // of the integers 0 ≤ i < 16, plus a 6-bit tail with value 16.
-//   v  vv   vvv   vvv    vvvv    vvvv    vvvv    vvvv
-//  01101110010111011110001001101010111100110111101111010000
-//  ^ ^^  ^^^   ^^^   ^^^^    ^^^^    ^^^^    ^^^^    ^^^^^^
+//
+//	 v  vv   vvv   vvv    vvvv    vvvv    vvvv    vvvv
+//	01101110010111011110001001101010111100110111101111010000
+//	^ ^^  ^^^   ^^^   ^^^^    ^^^^    ^^^^    ^^^^    ^^^^^^
 //
 // In hex, MSB first:
-//  0110 1110 0101 1101 1110 0010 0110 1010 1111 0011 0111 1011 1101 0000
-//  6    E    5    D    E    2    6    A    F    3    7    B    D    0
+//
+//	0110 1110 0101 1101 1110 0010 0110 1010 1111 0011 0111 1011 1101 0000
+//	6    E    5    D    E    2    6    A    F    3    7    B    D    0
 //
 // In hex, LSB first:
-//  0111 0110 1011 1010 0100 0111 0101 0110 1100 1111 1101 1110 0000 1011
-//  7    6    B    A    4    7    5    6    C    F    D    E    0    B
+//
+//	0111 0110 1011 1010 0100 0111 0101 0110 1100 1111 1101 1110 0000 1011
+//	7    6    B    A    4    7    5    6    C    F    D    E    0    B
 const msbTestStream = "\x6e\x5d\xe2\x6a\xf3\x7b\xd0"
 const lsbTestStream = "\x76\xba\x47\x56\xcf\xde\x0b"
 
